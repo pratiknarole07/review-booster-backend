@@ -1,41 +1,56 @@
-
 const express = require("express");
 const app = express();
 const cors = require("cors");
-const fs = require("fs");
 const mongoose = require("mongoose");
-
 
 app.use(cors());
 app.use(express.json());
 
+/* =======================
+   MongoDB Connection
+======================= */
 
-// ------------------ STATS FILE ------------------
+mongoose
+  .connect(
+    "mongodb+srv://reviewbooster:Dhoni1234@reviewbooster.bprbbl3.mongodb.net/reviewbooster"
+  )
+  .then(() => console.log("MongoDB Connected Successfully"))
+  .catch(err => console.log(err));
 
-function readStats() {
-  return JSON.parse(fs.readFileSync("data.json"));
-}
+/* =======================
+   Schemas & Models
+======================= */
 
-function writeStats(data) {
-  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
-}
+const statsSchema = new mongoose.Schema({
+  month: String,
+  total: Number,
+  positive: Number,
+  negative: Number
+});
 
+const Stats = mongoose.model("Stats", statsSchema);
 
-// ------------------ BAD FEEDBACK FILE ------------------
+const badFeedbackSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  message: String,
+  month: String,
+  date: Date
+});
 
-function readBadFeedback() {
-  return JSON.parse(fs.readFileSync("badFeedback.json"));
-}
+const BadFeedback = mongoose.model("BadFeedback", badFeedbackSchema);
 
-function writeBadFeedback(data) {
-  fs.writeFileSync("badFeedback.json", JSON.stringify(data, null, 2));
-}
+/* =======================
+   Routes
+======================= */
 
+// Health check (optional but good)
+app.get("/", (req, res) => {
+  res.send("Review Booster API Running 🚀");
+});
 
-// ------------------ FEEDBACK API (MONTH-WISE) ------------------
-
+// -------- SAVE GOOD / BAD CLICK --------
 app.post("/api/feedback", async (req, res) => {
-
   const { type } = req.body;
 
   const now = new Date();
@@ -65,33 +80,25 @@ app.post("/api/feedback", async (req, res) => {
   res.json({ success: true });
 });
 
-
-
-// ------------------ STATS API (CURRENT MONTH DEFAULT) ------------------
-
+// -------- GET MONTH STATS --------
 app.get("/api/stats", async (req, res) => {
-
   const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
-
-  const month = req.query.month || currentMonth;
+  const defaultMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
+  const month = req.query.month || defaultMonth;
 
   const stats = await Stats.findOne({ month });
 
-  res.json(stats || {
-    total: 0,
-    positive: 0,
-    negative: 0
-  });
-
+  res.json(
+    stats || {
+      total: 0,
+      positive: 0,
+      negative: 0
+    }
+  );
 });
 
-
-
-// ------------------ SAVE BAD FEEDBACK ------------------
-
+// -------- SAVE BAD FEEDBACK --------
 app.post("/api/bad-feedback", async (req, res) => {
-
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
 
@@ -108,62 +115,27 @@ app.post("/api/bad-feedback", async (req, res) => {
   res.json({ success: true });
 });
 
-
-
-// ------------------ GET BAD FEEDBACK ------------------
-
-app.get("/api/bad-feedback", (req, res) => {
-
-  let list = readBadFeedback();
+// -------- GET BAD FEEDBACK (MONTH WISE) --------
+app.get("/api/bad-feedback", async (req, res) => {
   const month = req.query.month;
 
-  // If month filter present
+  let data;
+
   if (month) {
-    list = list.filter(item => item.month === month);
+    data = await BadFeedback.find({ month }).sort({ date: -1 });
+  } else {
+    data = await BadFeedback.find().sort({ date: -1 });
   }
 
-  res.json(list);
-
+  res.json(data);
 });
 
-
-
-// ------------------ SERVER ------------------
+/* =======================
+   Server Start
+======================= */
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
-
-
-
-//db
-
-mongoose.connect("mongodb+srv://reviewbooster:Dhoni1234@reviewbooster.bprbbl3.mongodb.net/reviewbooster")
-.then(() => console.log("MongoDB Connected Successfully"))
-.catch(err => console.log(err));
-//schemas
-
-
-const statsSchema = new mongoose.Schema({
-  month: String,
-  total: Number,
-  positive: Number,
-  negative: Number
-});
-
-const Stats = mongoose.model("Stats", statsSchema);
-
-
-
-const badFeedbackSchema = new mongoose.Schema({
-  name: String,
-  email: String,
-  message: String,
-  month: String,
-  date: Date
-});
-
-const BadFeedback = mongoose.model("BadFeedback", badFeedbackSchema);
-
