@@ -194,6 +194,20 @@ app.post("/api/feedback", async (req,res)=>{
 });
 
 
+app.get("/api/bad-feedback", async (req, res) => {
+
+  const { businessId, month } = req.query;
+
+  const data = await BadFeedback.find({
+    businessId,
+    month
+  }).sort({ date: -1 });
+
+  res.json(data);
+
+});
+
+
 /* =======================
  GET STATS (MONTH WISE)
 ======================= */
