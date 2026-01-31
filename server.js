@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 /* =======================
-   MongoDB Connection
+   MongoDB Connection 
 ======================= */
 
 mongoose
@@ -20,23 +20,26 @@ mongoose
 /* =======================
    Schemas & Models
 ======================= */
-
 const statsSchema = new mongoose.Schema({
+  businessId: String,
   month: String,
   total: Number,
   positive: Number,
   negative: Number
 });
 
+
 const Stats = mongoose.model("Stats", statsSchema);
 
 const badFeedbackSchema = new mongoose.Schema({
+  businessId: String,
   name: String,
   email: String,
   message: String,
   month: String,
   date: Date
 });
+
 
 const BadFeedback = mongoose.model("BadFeedback", badFeedbackSchema);
 
@@ -51,15 +54,17 @@ app.get("/", (req, res) => {
 
 // -------- SAVE GOOD / BAD CLICK --------
 app.post("/api/feedback", async (req, res) => {
-  const { type } = req.body;
+
+  const { type, businessId } = req.body;
 
   const now = new Date();
-  const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+  const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
 
-  let stats = await Stats.findOne({ month: monthKey });
+  let stats = await Stats.findOne({ businessId, month: monthKey });
 
   if (!stats) {
     stats = new Stats({
+      businessId,
       month: monthKey,
       total: 0,
       positive: 0,
@@ -80,32 +85,35 @@ app.post("/api/feedback", async (req, res) => {
   res.json({ success: true });
 });
 
+
 // -------- GET MONTH STATS --------
 app.get("/api/stats", async (req, res) => {
-  const now = new Date();
-  const defaultMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
-  const month = req.query.month || defaultMonth;
 
-  const stats = await Stats.findOne({ month });
+  const { businessId, month } = req.query;
 
-  res.json(
-    stats || {
-      total: 0,
-      positive: 0,
-      negative: 0
-    }
-  );
+  const stats = await Stats.findOne({ businessId, month });
+
+  res.json(stats || {
+    total: 0,
+    positive: 0,
+    negative: 0
+  });
+
 });
 
-// -------- SAVE BAD FEEDBACK --------
+// -------- GET BAD FEEDBACK (MONTH WISE) --------
 app.post("/api/bad-feedback", async (req, res) => {
+
+  const { businessId, name, email, message } = req.body;
+
   const now = new Date();
-  const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+  const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
 
   const feedback = new BadFeedback({
-    name: req.body.name,
-    email: req.body.email,
-    message: req.body.message,
+    businessId,
+    name,
+    email,
+    message,
     month: monthKey,
     date: new Date()
   });
@@ -113,22 +121,34 @@ app.post("/api/bad-feedback", async (req, res) => {
   await feedback.save();
 
   res.json({ success: true });
+
 });
 
-// -------- GET BAD FEEDBACK (MONTH WISE) --------
-app.get("/api/bad-feedback", async (req, res) => {
-  const month = req.query.month;
+//fetch bad feedback
 
-  let data;
 
-  if (month) {
-    data = await BadFeedback.find({ month }).sort({ date: -1 });
-  } else {
-    data = await BadFeedback.find().sort({ date: -1 });
-  }
+app.post("/api/bad-feedback", async (req, res) => {
 
-  res.json(data);
+  const { businessId, name, email, message } = req.body;
+
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
+
+  const feedback = new BadFeedback({
+    businessId,
+    name,
+    email,
+    message,
+    month: monthKey,
+    date: new Date()
+  });
+
+  await feedback.save();
+
+  res.json({ success: true });
+
 });
+
 
 /* =======================
    Server Start
@@ -138,4 +158,64 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("Server running on port", PORT);
+});
+
+
+const businessSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  password: String,
+  businessId: String,
+  googleReviewLink: String,
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const Business = mongoose.model("Business", businessSchema);
+
+
+app.post("/api/login", async (req, res) => {
+
+  const { email, password } = req.body;
+
+  const business = await Business.findOne({ email, password });
+
+  if (!business) {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
+
+  res.json({
+    success: true,
+    businessId: business.businessId,
+    businessName: business.name,
+    googleReviewLink: business.googleReviewLink
+  });
+
+});
+
+
+
+app.post("/api/create-business", async (req, res) => {
+
+  const { name, email, password, googleReviewLink } = req.body;
+
+  const businessId = "biz_" + Date.now();
+
+  const business = new Business({
+    name,
+    email,
+    password,
+    businessId,
+    googleReviewLink
+  });
+
+  await business.save();
+
+  res.json({
+    success: true,
+    businessId
+  });
+
 });
