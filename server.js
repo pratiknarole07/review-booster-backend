@@ -281,3 +281,24 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=>{
  console.log("Server running on port", PORT);
 });
+
+
+
+
+
+
+app.get("/api/get-business/:id", async (req, res) => {
+
+  const business = await Business.findOne({
+    businessId: req.params.id
+  });
+
+  if(!business){
+    return res.status(404).json({ error: "Business not found" });
+  }
+
+  res.json({
+    googleReviewLink: business.googleReviewLink
+  });
+
+});
