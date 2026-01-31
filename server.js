@@ -71,33 +71,55 @@ app.get("/", (req,res)=>{
 /* =======================
  CREATE BUSINESS (ADMIN)
 ======================= */
+app.post("/api/create-business", async (req, res) => {
 
-app.post("/api/create-business", async (req,res)=>{
+ try {
 
- const { name, email, password, googleReviewLink } = req.body;
+   const { name, email, password, googleReviewLink } = req.body;
 
- const exist = await Business.findOne({ email });
+   if (!name || !email || !password || !googleReviewLink) {
+     return res.status(400).json({ 
+       success: false, 
+       message: "All fields required" 
+     });
+   }
 
- if(exist){
-   return res.json({ success:false, message:"Business already exists"});
+   const exist = await Business.findOne({ email });
+
+   if (exist) {
+     return res.json({ 
+       success: false, 
+       message: "Business already exists" 
+     });
+   }
+
+   const businessId = "biz_" + Date.now();
+
+   const business = new Business({
+     name,
+     email,
+     password,
+     businessId,
+     googleReviewLink
+   });
+
+   await business.save();
+
+   res.json({
+     success: true,
+     businessId
+   });
+
+ } catch (err) {
+
+   console.error("Create business error:", err);
+
+   res.status(500).json({
+     success: false,
+     error: err.message
+   });
+
  }
-
- const businessId = "biz_" + Date.now();
-
- const business = new Business({
-   name,
-   email,
-   password,
-   businessId,
-   googleReviewLink
- });
-
- await business.save();
-
- res.json({
-   success:true,
-   businessId
- });
 
 });
 
@@ -105,23 +127,31 @@ app.post("/api/create-business", async (req,res)=>{
 /* =======================
  LOGIN API
 ======================= */
+app.post("/api/login", async (req, res) => {
 
-app.post("/api/login", async (req,res)=>{
+ try {
 
- const { email, password } = req.body;
+   const { email, password } = req.body;
 
- const business = await Business.findOne({ email, password });
+   const business = await Business.findOne({ email, password });
 
- if(!business){
-   return res.json({ success:false });
+   if (!business) {
+     return res.json({ success:false });
+   }
+
+   res.json({
+     success:true,
+     businessId: business.businessId,
+     businessName: business.name,
+     googleReviewLink: business.googleReviewLink
+   });
+
+ } catch(err){
+
+   console.error(err);
+   res.status(500).json({ success:false });
+
  }
-
- res.json({
-   success:true,
-   businessId: business.businessId,
-   businessName: business.name,
-   googleReviewLink: business.googleReviewLink
- });
 
 });
 
