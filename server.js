@@ -21,6 +21,7 @@ mongoose.connect(
  Schemas
 ======================= */
 
+// Business (Clients)
 const businessSchema = new mongoose.Schema({
  name: String,
  email: String,
@@ -36,6 +37,7 @@ const businessSchema = new mongoose.Schema({
 const Business = mongoose.model("Business", businessSchema);
 
 
+// Stats (Month Wise)
 const statsSchema = new mongoose.Schema({
  businessId: String,
  month: String,
@@ -47,6 +49,7 @@ const statsSchema = new mongoose.Schema({
 const Stats = mongoose.model("Stats", statsSchema);
 
 
+// Bad Feedback
 const badFeedbackSchema = new mongoose.Schema({
  businessId: String,
  name: String,
@@ -71,6 +74,7 @@ app.get("/", (req,res)=>{
 /* =======================
  CREATE BUSINESS (ADMIN)
 ======================= */
+
 app.post("/api/create-business", async (req, res) => {
 
  try {
@@ -112,11 +116,10 @@ app.post("/api/create-business", async (req, res) => {
 
  } catch (err) {
 
-   console.error("Create business error:", err);
+   console.error(err);
 
    res.status(500).json({
-     success: false,
-     error: err.message
+     success: false
    });
 
  }
@@ -127,6 +130,7 @@ app.post("/api/create-business", async (req, res) => {
 /* =======================
  LOGIN API
 ======================= */
+
 app.post("/api/login", async (req, res) => {
 
  try {
@@ -157,12 +161,33 @@ app.post("/api/login", async (req, res) => {
 
 
 /* =======================
- SAVE GOOD/BAD CLICK
+ GET BUSINESS (PUBLIC)
 ======================= */
 
-app.post("/api/feedback", async (req,res)=>{
+app.get("/api/get-business/:id", async (req, res) => {
 
- const { type, businessId } = req.body;
+ const business = await Business.findOne({
+   businessId: req.params.id
+ });
+
+ if(!business){
+   return res.status(404).json({ error: "Business not found" });
+ }
+
+ res.json({
+   googleReviewLink: business.googleReviewLink
+ });
+
+});
+
+
+/* =======================
+ CONFIRM POSITIVE REVIEW
+======================= */
+
+app.post("/api/confirm-positive", async (req,res)=>{
+
+ const { businessId } = req.body;
 
  const now = new Date();
  const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
@@ -172,7 +197,7 @@ app.post("/api/feedback", async (req,res)=>{
  if(!stats){
    stats = new Stats({
      businessId,
-     month: monthKey,
+     month:monthKey,
      total:0,
      positive:0,
      negative:0
@@ -180,49 +205,11 @@ app.post("/api/feedback", async (req,res)=>{
  }
 
  stats.total++;
-
- if(type==="positive"){
-   stats.positive++;
- } else {
-   stats.negative++;
- }
+ stats.positive++;
 
  await stats.save();
 
  res.json({ success:true });
-
-});
-
-
-app.get("/api/bad-feedback", async (req, res) => {
-
-  const { businessId, month } = req.query;
-
-  const data = await BadFeedback.find({
-    businessId,
-    month
-  }).sort({ date: -1 });
-
-  res.json(data);
-
-});
-
-
-/* =======================
- GET STATS (MONTH WISE)
-======================= */
-
-app.get("/api/stats", async (req,res)=>{
-
- const { businessId, month } = req.query;
-
- const stats = await Stats.findOne({ businessId, month });
-
- res.json(stats || {
-   total:0,
-   positive:0,
-   negative:0
- });
 
 });
 
@@ -249,6 +236,25 @@ app.post("/api/bad-feedback", async (req,res)=>{
 
  await feedback.save();
 
+ // ALSO UPDATE STATS
+
+ let stats = await Stats.findOne({ businessId, month: monthKey });
+
+ if(!stats){
+   stats = new Stats({
+     businessId,
+     month:monthKey,
+     total:0,
+     positive:0,
+     negative:0
+   });
+ }
+
+ stats.total++;
+ stats.negative++;
+
+ await stats.save();
+
  res.json({ success:true });
 
 });
@@ -273,62 +279,30 @@ app.get("/api/bad-feedback", async (req,res)=>{
 
 
 /* =======================
- Server Start
+ GET STATS (MONTH WISE)
+======================= */
+
+app.get("/api/stats", async (req,res)=>{
+
+ const { businessId, month } = req.query;
+
+ const stats = await Stats.findOne({ businessId, month });
+
+ res.json(stats || {
+   total:0,
+   positive:0,
+   negative:0
+ });
+
+});
+
+
+/* =======================
+ SERVER START
 ======================= */
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, ()=>{
  console.log("Server running on port", PORT);
-});
-
-
-
-
-
-
-app.get("/api/get-business/:id", async (req, res) => {
-
-  const business = await Business.findOne({
-    businessId: req.params.id
-  });
-
-  if(!business){
-    return res.status(404).json({ error: "Business not found" });
-  }
-
- 
- app.post("/api/confirm-positive", async (req,res)=>{
-
- const { businessId } = req.body;
-
- const now = new Date();
- const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
-
- let stats = await Stats.findOne({ businessId, month: monthKey });
-
- if(!stats){
-   stats = new Stats({
-     businessId,
-     month:monthKey,
-     total:0,
-     positive:0,
-     negative:0
-   });
- }
-
- stats.total++;
- stats.positive++;
-
- await stats.save();
-
- res.json({success:true});
-
-});
-
-
-  res.json({
-    googleReviewLink: business.googleReviewLink
-  });
-
 });
