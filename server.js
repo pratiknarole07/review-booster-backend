@@ -297,6 +297,36 @@ app.get("/api/get-business/:id", async (req, res) => {
     return res.status(404).json({ error: "Business not found" });
   }
 
+ 
+ app.post("/api/confirm-positive", async (req,res)=>{
+
+ const { businessId } = req.body;
+
+ const now = new Date();
+ const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
+
+ let stats = await Stats.findOne({ businessId, month: monthKey });
+
+ if(!stats){
+   stats = new Stats({
+     businessId,
+     month:monthKey,
+     total:0,
+     positive:0,
+     negative:0
+   });
+ }
+
+ stats.total++;
+ stats.positive++;
+
+ await stats.save();
+
+ res.json({success:true});
+
+});
+
+
   res.json({
     googleReviewLink: business.googleReviewLink
   });
