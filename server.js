@@ -215,7 +215,6 @@ app.get("/api/bad-feedback", async (req,res)=>{
 /* =======================
  Sync Google Reviews (MONTHLY)
 ======================= */
-
 app.post("/api/sync-google-reviews", async (req,res)=>{
 
  try{
@@ -226,11 +225,17 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
    "https://api.apify.com/v2/datasets/MlpncVBqr6RE8ubW9/items?clean=true";
 
   const response = await axios.get(APIFY_URL);
-  const reviews = response.data;
 
-  if(!reviews || reviews.length === 0){
+  const data = response.data;
+
+  if(!data || data.length === 0){
     return res.json({ success:false });
   }
+
+  // ✅ Real Google total from Apify
+  const liveTotal = data[0].reviewsCount;
+
+  // ===== Monthly calculation =====
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -238,26 +243,23 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
   let monthlyCount = 0;
 
-  reviews.forEach(r => {
+  data.forEach(r => {
 
     const dateValue = r.reviewDate || r.publishedAt;
-
     if(!dateValue) return;
 
-    const reviewDate = new Date(dateValue);
+    const d = new Date(dateValue);
 
     if(
-      reviewDate.getMonth() + 1 === currentMonth &&
-      reviewDate.getFullYear() === currentYear
+      d.getMonth()+1 === currentMonth &&
+      d.getFullYear() === currentYear
     ){
       monthlyCount++;
     }
 
   });
 
-  // Save LIVE total also
-  const liveTotal = reviews.length;
-
+  // Save LIVE Google count
   await Business.updateOne(
     { businessId },
     { googleReviewCount: liveTotal }
@@ -276,9 +278,9 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
   await stats.save();
 
   res.json({
-   success:true,
-   liveTotal,
-   monthlyCount
+    success:true,
+    liveTotal,
+    monthlyCount
   });
 
  }
@@ -290,7 +292,6 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
  }
 
 });
-
 
 /* =======================
  Get Dashboard Stats
