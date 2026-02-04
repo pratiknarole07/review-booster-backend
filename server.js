@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const mongoose = require("mongoose");
+const axios = require("axios");
 
 app.use(cors());
 app.use(express.json());
@@ -21,7 +22,7 @@ mongoose.connect(
  Schemas
 ======================= */
 
-// Business (Clients)
+// -------- Business (Clients) --------
 
 const businessSchema = new mongoose.Schema({
  name: String,
@@ -29,6 +30,7 @@ const businessSchema = new mongoose.Schema({
  password: String,
  businessId: String,
  googleReviewLink: String,
+ googleReviewCount: { type:Number, default:0 },
  createdAt: {
    type: Date,
    default: Date.now
@@ -38,20 +40,20 @@ const businessSchema = new mongoose.Schema({
 const Business = mongoose.model("Business", businessSchema);
 
 
-// Monthly Stats
+// -------- Monthly Stats --------
 
 const statsSchema = new mongoose.Schema({
  businessId: String,
  month: String,
- total: { type: Number, default: 0 },      // WhatsApp Sent
- positive: { type: Number, default: 0 },   // Google Reviews (from Apify)
- negative: { type: Number, default: 0 }    // Bad Feedback
+ total: { type:Number, default:0 },     // WhatsApp Sent
+ positive: { type:Number, default:0 },  // Google Reviews
+ negative: { type:Number, default:0 }   // Bad Feedback
 });
 
 const Stats = mongoose.model("Stats", statsSchema);
 
 
-// Bad Feedback
+// -------- Bad Feedback --------
 
 const badFeedbackSchema = new mongoose.Schema({
  businessId: String,
@@ -171,7 +173,7 @@ app.get("/api/get-business/:id", async (req, res) => {
 
 
 /* =======================
- INCREASE TOTAL (WHATSAPP SEND)
+ INCREASE TOTAL (WhatsApp Sent)
 ======================= */
 
 app.post("/api/increase-total", async (req,res)=>{
@@ -222,7 +224,7 @@ app.post("/api/bad-feedback", async (req,res)=>{
  await feedback.save();
 
 
- // Update monthly stats
+ // Update Monthly Stats
 
  let stats = await Stats.findOne({ businessId, month: monthKey });
 
@@ -244,7 +246,7 @@ app.post("/api/bad-feedback", async (req,res)=>{
 
 
 /* =======================
- GET BAD FEEDBACK (MONTH)
+ GET BAD FEEDBACK
 ======================= */
 
 app.get("/api/bad-feedback", async (req,res)=>{
@@ -262,7 +264,69 @@ app.get("/api/bad-feedback", async (req,res)=>{
 
 
 /* =======================
- GET STATS (MONTH)
+ GOOGLE REVIEW SYNC (APIFY)
+======================= */
+
+app.post("/api/sync-google-reviews", async (req,res)=>{
+
+ try{
+
+   const { businessId } = req.body;
+
+   const APIFY_URL =
+    "https://api.apify.com/v2/datasets/MlpncVBqr6RE8ubW9/items?clean=true";
+
+   const response = await axios.get(APIFY_URL);
+
+   const data = response.data;
+
+   if(!data || data.length === 0){
+     return res.json({ success:false });
+   }
+
+   const googleCount = data[0].reviewsCount;
+
+   // Update Business table
+   await Business.updateOne(
+     { businessId },
+     { googleReviewCount: googleCount }
+   );
+
+   // Monthly stats update
+   const now = new Date();
+   const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
+
+   let stats = await Stats.findOne({ businessId, month: monthKey });
+
+   if(!stats){
+     stats = new Stats({
+       businessId,
+       month: monthKey
+     });
+   }
+
+   stats.positive = googleCount;
+
+   await stats.save();
+
+   res.json({
+     success:true,
+     googleReviewCount: googleCount
+   });
+
+ }catch(err){
+
+   console.log("Apify Error:", err.message);
+
+   res.status(500).json({ success:false });
+
+ }
+
+});
+
+
+/* =======================
+ GET STATS
 ======================= */
 
 app.get("/api/stats", async (req,res)=>{
