@@ -22,6 +22,7 @@ mongoose.connect(
 ======================= */
 
 // Business (Clients)
+
 const businessSchema = new mongoose.Schema({
  name: String,
  email: String,
@@ -37,19 +38,21 @@ const businessSchema = new mongoose.Schema({
 const Business = mongoose.model("Business", businessSchema);
 
 
-// Stats (Month Wise)
+// Monthly Stats
+
 const statsSchema = new mongoose.Schema({
  businessId: String,
  month: String,
- total: Number,
- positive: Number,
- negative: Number
+ total: { type: Number, default: 0 },      // WhatsApp Sent
+ positive: { type: Number, default: 0 },   // Google Reviews (from Apify)
+ negative: { type: Number, default: 0 }    // Bad Feedback
 });
 
 const Stats = mongoose.model("Stats", statsSchema);
 
 
 // Bad Feedback
+
 const badFeedbackSchema = new mongoose.Schema({
  businessId: String,
  name: String,
@@ -82,19 +85,13 @@ app.post("/api/create-business", async (req, res) => {
    const { name, email, password, googleReviewLink } = req.body;
 
    if (!name || !email || !password || !googleReviewLink) {
-     return res.status(400).json({ 
-       success: false, 
-       message: "All fields required" 
-     });
+     return res.status(400).json({ success:false });
    }
 
    const exist = await Business.findOne({ email });
 
    if (exist) {
-     return res.json({ 
-       success: false, 
-       message: "Business already exists" 
-     });
+     return res.json({ success:false, message:"Already exists" });
    }
 
    const businessId = "biz_" + Date.now();
@@ -115,20 +112,15 @@ app.post("/api/create-business", async (req, res) => {
    });
 
  } catch (err) {
-
-   console.error(err);
-
-   res.status(500).json({
-     success: false
-   });
-
+   console.log(err);
+   res.status(500).json({ success:false });
  }
 
 });
 
 
 /* =======================
- LOGIN API
+ LOGIN
 ======================= */
 
 app.post("/api/login", async (req, res) => {
@@ -151,10 +143,7 @@ app.post("/api/login", async (req, res) => {
    });
 
  } catch(err){
-
-   console.error(err);
    res.status(500).json({ success:false });
-
  }
 
 });
@@ -182,10 +171,10 @@ app.get("/api/get-business/:id", async (req, res) => {
 
 
 /* =======================
- CONFIRM POSITIVE REVIEW
+ INCREASE TOTAL (WHATSAPP SEND)
 ======================= */
 
-app.post("/api/confirm-positive", async (req,res)=>{
+app.post("/api/increase-total", async (req,res)=>{
 
  const { businessId } = req.body;
 
@@ -197,15 +186,11 @@ app.post("/api/confirm-positive", async (req,res)=>{
  if(!stats){
    stats = new Stats({
      businessId,
-     month:monthKey,
-     total:0,
-     positive:0,
-     negative:0
+     month: monthKey
    });
  }
 
  stats.total++;
- stats.positive++;
 
  await stats.save();
 
@@ -236,17 +221,15 @@ app.post("/api/bad-feedback", async (req,res)=>{
 
  await feedback.save();
 
- // ALSO UPDATE STATS
+
+ // Update monthly stats
 
  let stats = await Stats.findOne({ businessId, month: monthKey });
 
  if(!stats){
    stats = new Stats({
      businessId,
-     month:monthKey,
-     total:0,
-     positive:0,
-     negative:0
+     month: monthKey
    });
  }
 
@@ -279,7 +262,7 @@ app.get("/api/bad-feedback", async (req,res)=>{
 
 
 /* =======================
- GET STATS (MONTH WISE)
+ GET STATS (MONTH)
 ======================= */
 
 app.get("/api/stats", async (req,res)=>{
