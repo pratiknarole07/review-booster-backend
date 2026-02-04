@@ -286,46 +286,80 @@ app.get("/api/bad-feedback", async (req,res)=>{
 /* =======================
  GOOGLE REVIEW SYNC (APIFY)
 ======================= */
-
 app.post("/api/sync-google-reviews", async (req,res)=>{
 
  try{
 
-   const { businessId } = req.body;
+  const { businessId } = req.body;
 
-   const APIFY_URL =
+  const APIFY_URL =
    "https://api.apify.com/v2/datasets/MlpncVBqr6RE8ubW9/items?clean=true";
 
-   const response = await axios.get(APIFY_URL);
+  const response = await axios.get(APIFY_URL);
+  const googleTotal = response.data[0].reviewsCount;
 
-   const data = response.data;
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
 
-   if(!data || data.length === 0){
-     return res.json({ success:false });
-   }
+  // ===== GET BASELINE =====
 
-   const googleCount = data[0].reviewsCount;
+  let baseline = await GoogleBaseline.findOne({
+    businessId,
+    month: monthKey
+  });
 
-   // SAVE ONLY IN BUSINESS TABLE
+  // If month started first time → save baseline
+  if(!baseline){
 
-   await Business.updateOne(
-     { businessId },
-     { googleReviewCount: googleCount }
-   );
+    baseline = new GoogleBaseline({
+      businessId,
+      month: monthKey,
+      startCount: googleTotal
+    });
 
-   res.json({
-     success:true,
-     googleReviewCount: googleCount
-   });
+    await baseline.save();
+  }
 
- }catch(err){
+  // ===== MONTHLY CALCULATION =====
 
-   console.log("Apify Error:", err.message);
-   res.status(500).json({ success:false });
+  let monthlyGoogleReviews =
+    googleTotal - baseline.startCount;
+
+  if(monthlyGoogleReviews < 0){
+    monthlyGoogleReviews = 0;
+  }
+
+  // ===== UPDATE STATS =====
+
+  let stats = await Stats.findOne({
+    businessId,
+    month: monthKey
+  });
+
+  if(!stats){
+    stats = new Stats({ businessId, month: monthKey });
+  }
+
+  stats.positive = monthlyGoogleReviews;
+
+  await stats.save();
+
+  res.json({
+    success:true,
+    liveTotal: googleTotal,
+    monthlyCount: monthlyGoogleReviews
+  });
+
+ }
+ catch(err){
+
+  console.log("Google Sync Error:", err.message);
+  res.status(500).json({ success:false });
 
  }
 
 });
+
 
 
 /* =======================
@@ -355,3 +389,17 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=>{
  console.log("Server running on port", PORT);
 });
+
+
+
+
+const baselineSchema = new mongoose.Schema({
+ businessId:String,
+ month:String,
+ startCount:Number
+});
+
+const GoogleBaseline = mongoose.model("GoogleBaseline", baselineSchema);
+
+
+
