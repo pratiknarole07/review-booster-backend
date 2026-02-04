@@ -42,9 +42,9 @@ const Business = mongoose.model("Business", businessSchema);
 const statsSchema = new mongoose.Schema({
  businessId:String,
  month:String,
- total:{ type:Number, default:0 },     // WhatsApp Sent
- positive:{ type:Number, default:0 },  // Google Monthly Reviews
- negative:{ type:Number, default:0 }   // Bad Feedback
+ total:{ type:Number, default:0 },     
+ positive:{ type:Number, default:0 },  
+ negative:{ type:Number, default:0 }   
 });
 
 const Stats = mongoose.model("Stats", statsSchema);
@@ -137,7 +137,7 @@ app.get("/api/get-business/:id", async (req,res)=>{
 
 
 /* =======================
- Increase WhatsApp Count
+ Increase WhatsApp Total
 ======================= */
 
 app.post("/api/increase-total", async (req,res)=>{
@@ -215,6 +215,7 @@ app.get("/api/bad-feedback", async (req,res)=>{
 /* =======================
  Sync Google Reviews (MONTHLY)
 ======================= */
+
 app.post("/api/sync-google-reviews", async (req,res)=>{
 
  try{
@@ -232,11 +233,16 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
     return res.json({ success:false });
   }
 
-  // ✅ Real Google total from Apify
+  // Live Google Total
   const liveTotal = data[0].reviewsCount;
 
-  // ===== Monthly calculation =====
+  // Save live total
+  await Business.updateOne(
+    { businessId },
+    { googleReviewCount: liveTotal }
+  );
 
+  // Monthly calculation
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
@@ -245,10 +251,16 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
   data.forEach(r => {
 
-    const dateValue = r.reviewDate || r.publishedAt;
+    const dateValue =
+      r.reviewDate ||
+      r.publishedAt ||
+      r.date ||
+      r.time;
+
     if(!dateValue) return;
 
     const d = new Date(dateValue);
+    if(isNaN(d)) return;
 
     if(
       d.getMonth()+1 === currentMonth &&
@@ -258,12 +270,6 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
     }
 
   });
-
-  // Save LIVE Google count
-  await Business.updateOne(
-    { businessId },
-    { googleReviewCount: liveTotal }
-  );
 
   const monthKey = `${currentYear}-${currentMonth}`;
 
@@ -293,39 +299,10 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
 });
 
-/* =======================
- Get Dashboard Stats
-======================= */
-
-app.get("/api/stats", async (req,res)=>{
-
- const { businessId,month } = req.query;
-
- const stats = await Stats.findOne({ businessId,month });
-
- res.json(stats || {
-  total:0,
-  positive:0,
-  negative:0
- });
-
-});
-
 
 /* =======================
- Server Start
+ Recalculate Any Month (ADMIN TOOL)
 ======================= */
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, ()=>{
- console.log("Server running on port",PORT);
-});
-
-
-
-
-
 
 app.post("/api/recalculate-month", async (req,res)=>{
 
@@ -344,9 +321,16 @@ app.post("/api/recalculate-month", async (req,res)=>{
 
   reviews.forEach(r => {
 
-   if(!r.reviewDate) return;
+   const dateValue =
+     r.reviewDate ||
+     r.publishedAt ||
+     r.date ||
+     r.time;
 
-   const d = new Date(r.reviewDate);
+   if(!dateValue) return;
+
+   const d = new Date(dateValue);
+   if(isNaN(d)) return;
 
    if(
      d.getFullYear() === year &&
@@ -381,4 +365,34 @@ app.post("/api/recalculate-month", async (req,res)=>{
   res.status(500).json({ success:false });
  }
 
+});
+
+
+/* =======================
+ Get Dashboard Stats
+======================= */
+
+app.get("/api/stats", async (req,res)=>{
+
+ const { businessId,month } = req.query;
+
+ const stats = await Stats.findOne({ businessId,month });
+
+ res.json(stats || {
+  total:0,
+  positive:0,
+  negative:0
+ });
+
+});
+
+
+/* =======================
+ Server Start
+======================= */
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, ()=>{
+ console.log("Server running on port",PORT);
 });
