@@ -22,7 +22,7 @@ mongoose.connect(
  Schemas
 ======================= */
 
-// -------- Business (Clients) --------
+// -------- Business --------
 
 const businessSchema = new mongoose.Schema({
  name: String,
@@ -46,7 +46,6 @@ const statsSchema = new mongoose.Schema({
  businessId: String,
  month: String,
  total: { type:Number, default:0 },     // WhatsApp Sent
- positive: { type:Number, default:0 },  // Google Reviews
  negative: { type:Number, default:0 }   // Bad Feedback
 });
 
@@ -77,7 +76,7 @@ app.get("/", (req,res)=>{
 
 
 /* =======================
- CREATE BUSINESS (ADMIN)
+ CREATE BUSINESS
 ======================= */
 
 app.post("/api/create-business", async (req, res) => {
@@ -93,7 +92,7 @@ app.post("/api/create-business", async (req, res) => {
    const exist = await Business.findOne({ email });
 
    if (exist) {
-     return res.json({ success:false, message:"Already exists" });
+     return res.json({ success:false });
    }
 
    const businessId = "biz_" + Date.now();
@@ -109,7 +108,7 @@ app.post("/api/create-business", async (req, res) => {
    await business.save();
 
    res.json({
-     success: true,
+     success:true,
      businessId
    });
 
@@ -152,7 +151,7 @@ app.post("/api/login", async (req, res) => {
 
 
 /* =======================
- GET BUSINESS (PUBLIC)
+ GET BUSINESS PUBLIC
 ======================= */
 
 app.get("/api/get-business/:id", async (req, res) => {
@@ -162,11 +161,33 @@ app.get("/api/get-business/:id", async (req, res) => {
  });
 
  if(!business){
-   return res.status(404).json({ error: "Business not found" });
+   return res.status(404).json({ success:false });
  }
 
  res.json({
    googleReviewLink: business.googleReviewLink
+ });
+
+});
+
+
+/* =======================
+ GET BUSINESS INFO (Dashboard)
+======================= */
+
+app.get("/api/business-info/:id", async (req,res)=>{
+
+ const business = await Business.findOne({
+   businessId: req.params.id
+ });
+
+ if(!business){
+   return res.status(404).json({ success:false });
+ }
+
+ res.json({
+   googleReviewCount: business.googleReviewCount || 0,
+   name: business.name
  });
 
 });
@@ -223,8 +244,7 @@ app.post("/api/bad-feedback", async (req,res)=>{
 
  await feedback.save();
 
-
- // Update Monthly Stats
+ // Update monthly stats
 
  let stats = await Stats.findOne({ businessId, month: monthKey });
 
@@ -274,7 +294,7 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
    const { businessId } = req.body;
 
    const APIFY_URL =
-    "https://api.apify.com/v2/datasets/MlpncVBqr6RE8ubW9/items?clean=true";
+   "https://api.apify.com/v2/datasets/MlpncVBqr6RE8ubW9/items?clean=true";
 
    const response = await axios.get(APIFY_URL);
 
@@ -286,28 +306,12 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
    const googleCount = data[0].reviewsCount;
 
-   // Update Business table
+   // SAVE ONLY IN BUSINESS TABLE
+
    await Business.updateOne(
      { businessId },
      { googleReviewCount: googleCount }
    );
-
-   // Monthly stats update
-   const now = new Date();
-   const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
-
-   let stats = await Stats.findOne({ businessId, month: monthKey });
-
-   if(!stats){
-     stats = new Stats({
-       businessId,
-       month: monthKey
-     });
-   }
-
-   stats.positive = googleCount;
-
-   await stats.save();
 
    res.json({
      success:true,
@@ -317,7 +321,6 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
  }catch(err){
 
    console.log("Apify Error:", err.message);
-
    res.status(500).json({ success:false });
 
  }
@@ -326,7 +329,7 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
 
 /* =======================
- GET STATS
+ GET MONTH STATS
 ======================= */
 
 app.get("/api/stats", async (req,res)=>{
@@ -337,7 +340,6 @@ app.get("/api/stats", async (req,res)=>{
 
  res.json(stats || {
    total:0,
-   positive:0,
    negative:0
  });
 
