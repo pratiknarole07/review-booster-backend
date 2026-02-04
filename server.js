@@ -215,7 +215,6 @@ app.get("/api/bad-feedback", async (req,res)=>{
 /* =======================
  Sync Google Reviews (MONTHLY)
 ======================= */
-
 app.post("/api/sync-google-reviews", async (req,res)=>{
 
  try{
@@ -227,40 +226,27 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
   const response = await axios.get(APIFY_URL);
 
-  const data = response.data;
+  const businessData = response.data[0];
 
-  if(!data || data.length === 0){
+  if(!businessData || !businessData.reviews){
     return res.json({ success:false });
   }
 
-  // Live Google Total
-  const liveTotal = data[0].reviewsCount;
+  const reviews = businessData.reviews;
 
-  // Save live total
-  await Business.updateOne(
-    { businessId },
-    { googleReviewCount: liveTotal }
-  );
+  const liveTotal = businessData.reviewsCount;
 
-  // Monthly calculation
   const now = new Date();
-  const currentMonth = now.getMonth() + 1;
+  const currentMonth = now.getMonth()+1;
   const currentYear = now.getFullYear();
 
   let monthlyCount = 0;
 
-  data.forEach(r => {
+  reviews.forEach(r => {
 
-    const dateValue =
-      r.reviewDate ||
-      r.publishedAt ||
-      r.date ||
-      r.time;
+    if(!r.publishedAtDate) return;
 
-    if(!dateValue) return;
-
-    const d = new Date(dateValue);
-    if(isNaN(d)) return;
+    const d = new Date(r.publishedAtDate);
 
     if(
       d.getMonth()+1 === currentMonth &&
@@ -270,6 +256,12 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
     }
 
   });
+
+  // Save LIVE total
+  await Business.updateOne(
+    { businessId },
+    { googleReviewCount: liveTotal }
+  );
 
   const monthKey = `${currentYear}-${currentMonth}`;
 
@@ -291,13 +283,12 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
  }
  catch(err){
-
   console.log("Google Sync Error:", err.message);
   res.status(500).json({ success:false });
-
  }
 
 });
+
 
 
 /* =======================
@@ -315,29 +306,24 @@ app.post("/api/recalculate-month", async (req,res)=>{
 
   const response = await axios.get(APIFY_URL);
 
-  const reviews = response.data;
+  const businessData = response.data[0];
+
+  const reviews = businessData.reviews;
 
   let count = 0;
 
   reviews.forEach(r => {
 
-   const dateValue =
-     r.reviewDate ||
-     r.publishedAt ||
-     r.date ||
-     r.time;
+    if(!r.publishedAtDate) return;
 
-   if(!dateValue) return;
+    const d = new Date(r.publishedAtDate);
 
-   const d = new Date(dateValue);
-   if(isNaN(d)) return;
-
-   if(
-     d.getFullYear() === year &&
-     (d.getMonth()+1) === month
-   ){
-     count++;
-   }
+    if(
+      d.getFullYear() === year &&
+      (d.getMonth()+1) === month
+    ){
+      count++;
+    }
 
   });
 
@@ -366,7 +352,6 @@ app.post("/api/recalculate-month", async (req,res)=>{
  }
 
 });
-
 
 /* =======================
  Get Dashboard Stats
