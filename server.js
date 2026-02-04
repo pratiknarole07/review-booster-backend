@@ -22,17 +22,6 @@ mongoose.connect(
  Schemas
 ======================= */
 
-// ===== Google Monthly Baseline =====
-
-const baselineSchema = new mongoose.Schema({
- businessId:String,
- month:String,
- startCount:Number
-});
-
-const GoogleBaseline = mongoose.model("GoogleBaseline", baselineSchema);
-
-
 // ===== Business =====
 
 const businessSchema = new mongoose.Schema({
@@ -53,9 +42,9 @@ const Business = mongoose.model("Business", businessSchema);
 const statsSchema = new mongoose.Schema({
  businessId:String,
  month:String,
- total:{ type:Number, default:0 },
- positive:{ type:Number, default:0 },
- negative:{ type:Number, default:0 }
+ total:{ type:Number, default:0 },     // WhatsApp Sent
+ positive:{ type:Number, default:0 },  // Google Monthly Reviews
+ negative:{ type:Number, default:0 }   // Bad Feedback
 });
 
 const Stats = mongoose.model("Stats", statsSchema);
@@ -148,7 +137,7 @@ app.get("/api/get-business/:id", async (req,res)=>{
 
 
 /* =======================
- Increase WhatsApp Total
+ Increase WhatsApp Count
 ======================= */
 
 app.post("/api/increase-total", async (req,res)=>{
@@ -223,10 +212,8 @@ app.get("/api/bad-feedback", async (req,res)=>{
 });
 
 
- 
-
- /* =======================
-   Sync Google Reviews (MONTHLY) - FIXED
+/* =======================
+ Sync Google Reviews (MONTHLY)
 ======================= */
 
 app.post("/api/sync-google-reviews", async (req,res)=>{
@@ -239,7 +226,6 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
    "https://api.apify.com/v2/datasets/MlpncVBqr6RE8ubW9/items?clean=true";
 
   const response = await axios.get(APIFY_URL);
-
   const reviews = response.data;
 
   if(!reviews || reviews.length === 0){
@@ -250,15 +236,15 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
-  // ===== COUNT MONTHLY REVIEWS =====
-
   let monthlyCount = 0;
 
   reviews.forEach(r => {
 
-    if(!r.reviewDate) return;
+    const dateValue = r.reviewDate || r.publishedAt;
 
-    const reviewDate = new Date(r.reviewDate);
+    if(!dateValue) return;
+
+    const reviewDate = new Date(dateValue);
 
     if(
       reviewDate.getMonth() + 1 === currentMonth &&
@@ -269,7 +255,13 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
   });
 
-  // ===== UPDATE STATS =====
+  // Save LIVE total also
+  const liveTotal = reviews.length;
+
+  await Business.updateOne(
+    { businessId },
+    { googleReviewCount: liveTotal }
+  );
 
   const monthKey = `${currentYear}-${currentMonth}`;
 
@@ -284,8 +276,9 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
   await stats.save();
 
   res.json({
-    success:true,
-    monthlyCount
+   success:true,
+   liveTotal,
+   monthlyCount
   });
 
  }
@@ -297,8 +290,6 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
  }
 
 });
-
-
 
 
 /* =======================
