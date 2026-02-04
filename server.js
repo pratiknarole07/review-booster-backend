@@ -321,3 +321,64 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=>{
  console.log("Server running on port",PORT);
 });
+
+
+
+
+
+
+app.post("/api/recalculate-month", async (req,res)=>{
+
+ try{
+
+  const { businessId, year, month } = req.body;
+
+  const APIFY_URL =
+   "https://api.apify.com/v2/datasets/MlpncVBqr6RE8ubW9/items?clean=true";
+
+  const response = await axios.get(APIFY_URL);
+
+  const reviews = response.data;
+
+  let count = 0;
+
+  reviews.forEach(r => {
+
+   if(!r.reviewDate) return;
+
+   const d = new Date(r.reviewDate);
+
+   if(
+     d.getFullYear() === year &&
+     (d.getMonth()+1) === month
+   ){
+     count++;
+   }
+
+  });
+
+  const monthKey = `${year}-${month}`;
+
+  let stats = await Stats.findOne({ businessId, month:monthKey });
+
+  if(!stats){
+    stats = new Stats({ businessId, month:monthKey });
+  }
+
+  stats.positive = count;
+
+  await stats.save();
+
+  res.json({
+    success:true,
+    fixedMonth: monthKey,
+    correctedCount: count
+  });
+
+ }
+ catch(err){
+  console.log(err);
+  res.status(500).json({ success:false });
+ }
+
+});
