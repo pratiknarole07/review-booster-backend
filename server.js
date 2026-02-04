@@ -22,45 +22,54 @@ mongoose.connect(
  Schemas
 ======================= */
 
-// -------- Business --------
+// ===== Google Monthly Baseline =====
+
+const baselineSchema = new mongoose.Schema({
+ businessId:String,
+ month:String,
+ startCount:Number
+});
+
+const GoogleBaseline = mongoose.model("GoogleBaseline", baselineSchema);
+
+
+// ===== Business =====
 
 const businessSchema = new mongoose.Schema({
- name: String,
- email: String,
- password: String,
- businessId: String,
- googleReviewLink: String,
- googleReviewCount: { type:Number, default:0 },
- createdAt: {
-   type: Date,
-   default: Date.now
- }
+ name:String,
+ email:String,
+ password:String,
+ businessId:String,
+ googleReviewLink:String,
+ googleReviewCount:{ type:Number, default:0 },
+ createdAt:{ type:Date, default:Date.now }
 });
 
 const Business = mongoose.model("Business", businessSchema);
 
 
-// -------- Monthly Stats --------
+// ===== Monthly Stats =====
 
 const statsSchema = new mongoose.Schema({
- businessId: String,
- month: String,
- total: { type:Number, default:0 },     // WhatsApp Sent
- negative: { type:Number, default:0 }   // Bad Feedback
+ businessId:String,
+ month:String,
+ total:{ type:Number, default:0 },
+ positive:{ type:Number, default:0 },
+ negative:{ type:Number, default:0 }
 });
 
 const Stats = mongoose.model("Stats", statsSchema);
 
 
-// -------- Bad Feedback --------
+// ===== Bad Feedback =====
 
 const badFeedbackSchema = new mongoose.Schema({
- businessId: String,
- name: String,
- email: String,
- message: String,
- month: String,
- date: Date
+ businessId:String,
+ name:String,
+ email:String,
+ message:String,
+ month:String,
+ date:Date
 });
 
 const BadFeedback = mongoose.model("BadFeedback", badFeedbackSchema);
@@ -76,125 +85,70 @@ app.get("/", (req,res)=>{
 
 
 /* =======================
- CREATE BUSINESS
+ Create Business
 ======================= */
 
-app.post("/api/create-business", async (req, res) => {
+app.post("/api/create-business", async (req,res)=>{
 
- try {
+ const { name,email,password,googleReviewLink } = req.body;
 
-   const { name, email, password, googleReviewLink } = req.body;
+ const exist = await Business.findOne({ email });
+ if(exist) return res.json({ success:false });
 
-   if (!name || !email || !password || !googleReviewLink) {
-     return res.status(400).json({ success:false });
-   }
+ const businessId = "biz_" + Date.now();
 
-   const exist = await Business.findOne({ email });
-
-   if (exist) {
-     return res.json({ success:false });
-   }
-
-   const businessId = "biz_" + Date.now();
-
-   const business = new Business({
-     name,
-     email,
-     password,
-     businessId,
-     googleReviewLink
-   });
-
-   await business.save();
-
-   res.json({
-     success:true,
-     businessId
-   });
-
- } catch (err) {
-   console.log(err);
-   res.status(500).json({ success:false });
- }
-
-});
-
-
-/* =======================
- LOGIN
-======================= */
-
-app.post("/api/login", async (req, res) => {
-
- try {
-
-   const { email, password } = req.body;
-
-   const business = await Business.findOne({ email, password });
-
-   if (!business) {
-     return res.json({ success:false });
-   }
-
-   res.json({
-     success:true,
-     businessId: business.businessId,
-     businessName: business.name,
-     googleReviewLink: business.googleReviewLink
-   });
-
- } catch(err){
-   res.status(500).json({ success:false });
- }
-
-});
-
-
-/* =======================
- GET BUSINESS PUBLIC
-======================= */
-
-app.get("/api/get-business/:id", async (req, res) => {
-
- const business = await Business.findOne({
-   businessId: req.params.id
+ await Business.create({
+  name,email,password,googleReviewLink,businessId
  });
 
- if(!business){
-   return res.status(404).json({ success:false });
- }
+ res.json({ success:true, businessId });
+
+});
+
+
+/* =======================
+ Login
+======================= */
+
+app.post("/api/login", async (req,res)=>{
+
+ const { email,password } = req.body;
+
+ const business = await Business.findOne({ email,password });
+
+ if(!business) return res.json({ success:false });
 
  res.json({
-   googleReviewLink: business.googleReviewLink
+  success:true,
+  businessId:business.businessId,
+  businessName:business.name,
+  googleReviewLink:business.googleReviewLink
  });
 
 });
 
 
 /* =======================
- GET BUSINESS INFO (Dashboard)
+ Public Business
 ======================= */
 
-app.get("/api/business-info/:id", async (req,res)=>{
+app.get("/api/get-business/:id", async (req,res)=>{
 
  const business = await Business.findOne({
-   businessId: req.params.id
+  businessId:req.params.id
  });
 
- if(!business){
-   return res.status(404).json({ success:false });
- }
+ if(!business) return res.json({ success:false });
 
  res.json({
-   googleReviewCount: business.googleReviewCount || 0,
-   name: business.name
+  googleReviewLink:business.googleReviewLink
  });
 
 });
 
 
 /* =======================
- INCREASE TOTAL (WhatsApp Sent)
+ Increase WhatsApp Total
 ======================= */
 
 app.post("/api/increase-total", async (req,res)=>{
@@ -204,13 +158,10 @@ app.post("/api/increase-total", async (req,res)=>{
  const now = new Date();
  const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
 
- let stats = await Stats.findOne({ businessId, month: monthKey });
+ let stats = await Stats.findOne({ businessId, month:monthKey });
 
  if(!stats){
-   stats = new Stats({
-     businessId,
-     month: monthKey
-   });
+  stats = new Stats({ businessId, month:monthKey });
  }
 
  stats.total++;
@@ -223,36 +174,26 @@ app.post("/api/increase-total", async (req,res)=>{
 
 
 /* =======================
- SAVE BAD FEEDBACK
+ Save Bad Feedback
 ======================= */
 
 app.post("/api/bad-feedback", async (req,res)=>{
 
- const { businessId, name, email, message } = req.body;
+ const { businessId,name,email,message } = req.body;
 
  const now = new Date();
  const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
 
- const feedback = new BadFeedback({
-   businessId,
-   name,
-   email,
-   message,
-   month: monthKey,
-   date: new Date()
+ await BadFeedback.create({
+  businessId,name,email,message,
+  month:monthKey,
+  date:new Date()
  });
 
- await feedback.save();
-
- // Update monthly stats
-
- let stats = await Stats.findOne({ businessId, month: monthKey });
+ let stats = await Stats.findOne({ businessId, month:monthKey });
 
  if(!stats){
-   stats = new Stats({
-     businessId,
-     month: monthKey
-   });
+  stats = new Stats({ businessId, month:monthKey });
  }
 
  stats.total++;
@@ -266,16 +207,15 @@ app.post("/api/bad-feedback", async (req,res)=>{
 
 
 /* =======================
- GET BAD FEEDBACK
+ Get Bad Feedback
 ======================= */
 
 app.get("/api/bad-feedback", async (req,res)=>{
 
- const { businessId, month } = req.query;
+ const { businessId,month } = req.query;
 
  const list = await BadFeedback.find({
-   businessId,
-   month
+  businessId,month
  }).sort({ date:-1 });
 
  res.json(list);
@@ -284,8 +224,9 @@ app.get("/api/bad-feedback", async (req,res)=>{
 
 
 /* =======================
- GOOGLE REVIEW SYNC (APIFY)
+ Sync Google Reviews (MONTHLY)
 ======================= */
+
 app.post("/api/sync-google-reviews", async (req,res)=>{
 
  try{
@@ -298,62 +239,63 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
   const response = await axios.get(APIFY_URL);
   const googleTotal = response.data[0].reviewsCount;
 
+  // Save LIVE total also
+  await Business.updateOne(
+    { businessId },
+    { googleReviewCount: googleTotal }
+  );
+
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
 
-  // ===== GET BASELINE =====
+  // ----- Baseline -----
 
   let baseline = await GoogleBaseline.findOne({
     businessId,
-    month: monthKey
+    month:monthKey
   });
 
-  // If month started first time → save baseline
   if(!baseline){
 
-    baseline = new GoogleBaseline({
-      businessId,
-      month: monthKey,
-      startCount: googleTotal
-    });
+   baseline = new GoogleBaseline({
+    businessId,
+    month:monthKey,
+    startCount: googleTotal
+   });
 
-    await baseline.save();
+   await baseline.save();
   }
 
-  // ===== MONTHLY CALCULATION =====
+  // ----- Monthly Count -----
 
-  let monthlyGoogleReviews =
-    googleTotal - baseline.startCount;
+  let monthly = googleTotal - baseline.startCount;
+  if(monthly < 0) monthly = 0;
 
-  if(monthlyGoogleReviews < 0){
-    monthlyGoogleReviews = 0;
-  }
-
-  // ===== UPDATE STATS =====
+  // ----- Update Stats -----
 
   let stats = await Stats.findOne({
-    businessId,
-    month: monthKey
+   businessId,
+   month:monthKey
   });
 
   if(!stats){
-    stats = new Stats({ businessId, month: monthKey });
+   stats = new Stats({ businessId, month:monthKey });
   }
 
-  stats.positive = monthlyGoogleReviews;
+  stats.positive = monthly;
 
   await stats.save();
 
   res.json({
-    success:true,
-    liveTotal: googleTotal,
-    monthlyCount: monthlyGoogleReviews
+   success:true,
+   liveTotal: googleTotal,
+   monthlyCount: monthly
   });
 
  }
  catch(err){
 
-  console.log("Google Sync Error:", err.message);
+  console.log("Sync Error:", err.message);
   res.status(500).json({ success:false });
 
  }
@@ -361,45 +303,31 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 });
 
 
-
 /* =======================
- GET MONTH STATS
+ Get Dashboard Stats
 ======================= */
 
 app.get("/api/stats", async (req,res)=>{
 
- const { businessId, month } = req.query;
+ const { businessId,month } = req.query;
 
- const stats = await Stats.findOne({ businessId, month });
+ const stats = await Stats.findOne({ businessId,month });
 
  res.json(stats || {
-   total:0,
-   negative:0
+  total:0,
+  positive:0,
+  negative:0
  });
 
 });
 
 
 /* =======================
- SERVER START
+ Server Start
 ======================= */
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, ()=>{
- console.log("Server running on port", PORT);
+ console.log("Server running on port",PORT);
 });
-
-
-
-
-const baselineSchema = new mongoose.Schema({
- businessId:String,
- month:String,
- startCount:Number
-});
-
-const GoogleBaseline = mongoose.model("GoogleBaseline", baselineSchema);
-
-
-
