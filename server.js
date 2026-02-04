@@ -229,104 +229,75 @@ app.get("/api/bad-feedback", async (req,res)=>{
    Sync Google Reviews (MONTHLY) - FIXED
 ======================= */
 
-app.post("/api/sync-google-reviews", async (req, res) => {
+app.post("/api/sync-google-reviews", async (req,res)=>{
 
-  try {
+ try{
 
-    const { businessId } = req.body;
+  const { businessId } = req.body;
 
-    // ---- APIFY DATASET URL ----
-    const APIFY_URL =
-      "https://api.apify.com/v2/datasets/MlpncVBqr6RE8ubW9/items?clean=true";
+  const APIFY_URL =
+   "https://api.apify.com/v2/datasets/MlpncVBqr6RE8ubW9/items?clean=true";
 
-    const response = await axios.get(APIFY_URL);
+  const response = await axios.get(APIFY_URL);
 
-    const googleTotal = response.data[0].reviewsCount;
+  const reviews = response.data;
 
-    // ---- SAVE LIVE TOTAL COUNT ----
-    await Business.updateOne(
-      { businessId },
-      { googleReviewCount: googleTotal }
-    );
-
-    // ---- MONTH KEY FORMAT (2026-01) ----
-    const now = new Date();
-
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-    // ---- BASELINE (LOCKED ONCE PER MONTH) ----
-
-    let baseline = await GoogleBaseline.findOne({
-      businessId,
-      month: monthKey
-    });
-
-    if (!baseline) {
-
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      baseline = new GoogleBaseline({
-        businessId,
-        month: monthKey,
-        startCount: googleTotal,
-        createdAt: firstDayOfMonth
-      });
-
-      await baseline.save();
-    }
-
-    // ---- MONTHLY STATS (INCREMENTAL LOGIC) ----
-
-    let stats = await Stats.findOne({
-      businessId,
-      month: monthKey
-    });
-
-    if (!stats) {
-
-      stats = new Stats({
-        businessId,
-        month: monthKey,
-        positive: 0,
-        lastSyncedTotal: baseline.startCount
-      });
-
-    }
-
-    // ---- CALCULATE ONLY NEW REVIEWS ----
-
-    let increment = googleTotal - stats.lastSyncedTotal;
-
-    if (increment > 0) {
-      stats.positive += increment;
-    }
-
-    // Update last synced value
-    stats.lastSyncedTotal = googleTotal;
-
-    await stats.save();
-
-    // ---- RESPONSE ----
-
-    res.json({
-      success: true,
-      liveTotal: googleTotal,
-      monthlyCount: stats.positive
-    });
-
+  if(!reviews || reviews.length === 0){
+    return res.json({ success:false });
   }
-  catch (err) {
 
-    console.log("Sync Error:", err.message);
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
 
-    res.status(500).json({
-      success: false,
-      error: "Google review sync failed"
-    });
+  // ===== COUNT MONTHLY REVIEWS =====
 
+  let monthlyCount = 0;
+
+  reviews.forEach(r => {
+
+    if(!r.reviewDate) return;
+
+    const reviewDate = new Date(r.reviewDate);
+
+    if(
+      reviewDate.getMonth() + 1 === currentMonth &&
+      reviewDate.getFullYear() === currentYear
+    ){
+      monthlyCount++;
+    }
+
+  });
+
+  // ===== UPDATE STATS =====
+
+  const monthKey = `${currentYear}-${currentMonth}`;
+
+  let stats = await Stats.findOne({ businessId, month:monthKey });
+
+  if(!stats){
+    stats = new Stats({ businessId, month:monthKey });
   }
+
+  stats.positive = monthlyCount;
+
+  await stats.save();
+
+  res.json({
+    success:true,
+    monthlyCount
+  });
+
+ }
+ catch(err){
+
+  console.log("Google Sync Error:", err.message);
+  res.status(500).json({ success:false });
+
+ }
 
 });
+
 
 
 
