@@ -470,6 +470,31 @@ cron.schedule("0 * * * *", async ()=>{
      console.log("Sync error for",biz.name);
    }
 
+
+
+
+
+
+
+
+  app.post("/api/update-dataset", async(req,res)=>{
+
+ try{
+
+  const { businessId, apifyDatasetId } = req.body;
+
+  await Business.updateOne(
+   { businessId },
+   { apifyDatasetId }
+  );
+
+  res.json({ success:true, msg:"Dataset updated" });
+
+ }catch(err){
+  res.json({ success:false });
+ }
+
+});
  }
 
  console.log("All clients synced");
