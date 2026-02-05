@@ -82,10 +82,15 @@ app.get("/", (req,res)=>{
 /* =======================
  Create Business
 ======================= */
-
 app.post("/api/create-business", async (req,res)=>{
 
- const { name,email,password,googleReviewLink } = req.body;
+ const { 
+   name,
+   email,
+   password,
+   googleReviewLink,
+   apifyDatasetId   // ⭐ ADD THIS
+ } = req.body;
 
  const exist = await Business.findOne({ email });
  if(exist) return res.json({ success:false });
@@ -93,7 +98,12 @@ app.post("/api/create-business", async (req,res)=>{
  const businessId = "biz_" + Date.now();
 
  await Business.create({
-  name,email,password,googleReviewLink,businessId
+  name,
+  email,
+  password,
+  googleReviewLink,
+  apifyDatasetId,   // ⭐ SAVE HERE
+  businessId
  });
 
  res.json({ success:true, businessId });
