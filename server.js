@@ -227,51 +227,53 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
   const { businessId } = req.body;
 
-  // get business
+  // 🔥 Get business from DB
   const business = await Business.findOne({ businessId });
 
   if(!business || !business.apifyDatasetId){
-    return res.json({ success:false, msg:"Dataset not set" });
+    return res.json({ success:false, message:"Dataset not set" });
   }
 
-  const APIFY_URL =
-   `https://api.apify.com/v2/datasets/${business.apifyDatasetId}/items?clean=true`;
+  // 🔥 Use dynamic dataset id
+  const APIFY_URL = `https://api.apify.com/v2/datasets/${business.apifyDatasetId}/items?clean=true`;
 
   const response = await axios.get(APIFY_URL);
   const data = response.data;
 
-  if(!data || data.length===0){
-    return res.json({ success:false });
+  if(!data || data.length === 0){
+    return res.json({ success:false, message:"No data from apify" });
   }
 
-  // total google reviews
-  const liveTotal = data[0].reviewsCount;
+  // ✅ LIVE TOTAL REVIEWS
+  const liveTotal = data[0].reviewsCount || 0;
 
-  // monthly calc
+  // ===== Monthly calculation =====
   const now = new Date();
   const currentMonth = now.getMonth()+1;
   const currentYear = now.getFullYear();
 
   let monthlyCount = 0;
 
-  data.forEach(r=>{
-   const dateValue = r.publishedAtDate || r.reviewDate;
+  data.forEach(r => {
+
+   const dateValue = r.publishedAtDate || r.reviewDate || r.publishedAt;
    if(!dateValue) return;
 
    const d = new Date(dateValue);
 
    if(
-    d.getMonth()+1 === currentMonth &&
-    d.getFullYear() === currentYear
+     d.getMonth()+1 === currentMonth &&
+     d.getFullYear() === currentYear
    ){
-    monthlyCount++;
+     monthlyCount++;
    }
+
   });
 
-  // save live total
+  // Save live total
   await Business.updateOne(
-   { businessId },
-   { googleReviewCount: liveTotal }
+    { businessId },
+    { googleReviewCount: liveTotal }
   );
 
   const monthKey = `${currentYear}-${currentMonth}`;
@@ -279,7 +281,7 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
   let stats = await Stats.findOne({ businessId, month:monthKey });
 
   if(!stats){
-   stats = new Stats({ businessId, month:monthKey });
+    stats = new Stats({ businessId, month:monthKey });
   }
 
   stats.positive = monthlyCount;
@@ -293,7 +295,7 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 
  }
  catch(err){
-  console.log(err);
+  console.log("SYNC ERROR:",err.message);
   res.status(500).json({ success:false });
  }
 
