@@ -326,21 +326,6 @@ cron.schedule("*/5 * * * *", async ()=>{
 
 
  
-/* =======================
- Public Business
-======================= */
-
-app.get("/api/get-business/:id", async (req,res)=>{
-
- const business = await Business.findOne({
-  businessId:req.params.id
- });
-
- if(!business) return res.json({ success:false });
-
- res.json({
-  googleReviewLink:business.googleReviewLink
- });
 
 
 /* =======================
@@ -349,4 +334,32 @@ app.get("/api/get-business/:id", async (req,res)=>{
 const PORT=process.env.PORT||3000;
 app.listen(PORT,()=>{
  console.log("Server running on",PORT);
+});
+
+
+
+/* =======================
+ Get Business Public Data (IMPORTANT)
+======================= */
+app.get("/api/get-business/:id", async (req,res)=>{
+
+ try{
+
+   const business = await Business.findOne({
+     businessId: req.params.id
+   });
+
+   if(!business){
+     return res.json({ success:false, msg:"Business not found" });
+   }
+
+   res.json({
+     success:true,
+     googleReviewLink: business.googleReviewLink
+   });
+
+ }catch(err){
+   res.json({ success:false });
+ }
+
 });
