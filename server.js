@@ -323,6 +323,26 @@ cron.schedule("*/5 * * * *", async ()=>{
 
 });
 
+
+
+ 
+/* =======================
+ Public Business
+======================= */
+
+app.get("/api/get-business/:id", async (req,res)=>{
+
+ const business = await Business.findOne({
+  businessId:req.params.id
+ });
+
+ if(!business) return res.json({ success:false });
+
+ res.json({
+  googleReviewLink:business.googleReviewLink
+ });
+
+
 /* =======================
  Start Server
 ======================= */
