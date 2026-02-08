@@ -280,12 +280,14 @@ cron.schedule("*/5 * * * *", async ()=>{
      const reviewTime=new Date(r.publishedAtDate);
      const sentTime=new Date(req.sentTime);
 
-     const diff=(reviewTime - sentTime)/(1000*60*60);
+    
 
-     if(
-      reviewName.includes(req.customerName) &&
-      diff>=0 && diff<=24
-     ){
+    const diff=Math.abs(reviewTime - sentTime)/(1000*60*60);
+
+if(
+ reviewName.includes(req.customerName) &&
+ diff<=48
+){
 
       console.log("Matched:",reviewName);
 
