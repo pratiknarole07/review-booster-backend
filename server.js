@@ -245,6 +245,8 @@ app.post("/api/sync-google-reviews", async (req,res)=>{
 /* =======================
  LEVEL 2 MATCHING CRON (5 MIN)
 ======================= */
+
+
 cron.schedule("*/5 * * * *", async ()=>{
 
  console.log("Checking new reviews...");
@@ -253,17 +255,17 @@ cron.schedule("*/5 * * * *", async ()=>{
 
  for(const biz of businesses){
 
-  if(!biz.apifyDatasetId) continue;
-
   try{
 
-   const url=`https://api.apify.com/v2/actor-tasks/pELBXtpfeQW534Z4/runs/last/dataset/items?token=apify_api_OGYVaSsmeyn1EpOrX8ab4q43J6yL9O0fj9Ew&clean=true`;
+   // ⭐ ALWAYS GET LATEST REVIEWS
+   const url="https://api.apify.com/v2/actor-tasks/pELBXtpfeQW53f4Z4/runs/last/dataset/items?token=apify_api_OGYVaSsmeyn1EpOrX8ab4q43J6yL9O0fj9Ew&clean=true";
+
    const response=await axios.get(url);
    const data=response.data;
 
    if(!data || data.length===0) continue;
 
-   const reviews=data[0].reviews || data;
+   const reviews=data;
 
    const pending=await ReviewRequest.find({
     businessId:biz.businessId,
@@ -280,14 +282,12 @@ cron.schedule("*/5 * * * *", async ()=>{
      const reviewTime=new Date(r.publishedAtDate);
      const sentTime=new Date(req.sentTime);
 
-    
+     const diff=(reviewTime - sentTime)/(1000*60*60); // ⭐ correct time check
 
-    const diff=Math.abs(reviewTime - sentTime)/(1000*60*60);
-
-if(
- reviewName.includes(req.customerName) &&
- diff<=48
-){
+     if(
+       reviewName.includes(req.customerName) &&
+       diff>=0 && diff<=24
+     ){
 
       console.log("Matched:",reviewName);
 
@@ -325,7 +325,7 @@ if(
 
 });
 
-
+ 
 
  
 
