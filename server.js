@@ -9,20 +9,17 @@ app.use(cors());
 app.use(express.json());
 
 /* =======================
- MongoDB Connection
+ MongoDB
 ======================= */
-
-mongoose.connect(
- "mongodb+srv://reviewbooster:Dhoni1234@reviewbooster.bprbbl3.mongodb.net/reviewbooster"
-)
-.then(() => console.log("MongoDB Connected Successfully"))
-.catch(err => console.log(err));
+mongoose.connect("mongodb+srv://reviewbooster:Dhoni1234@reviewbooster.bprbbl3.mongodb.net/reviewbooster")
+.then(()=>console.log("Mongo Connected"))
+.catch(err=>console.log(err));
 
 /* =======================
- Schemas
+ SCHEMAS
 ======================= */
 
-// ===== Business =====
+// BUSINESS
 const businessSchema = new mongoose.Schema({
  name:String,
  email:String,
@@ -30,23 +27,22 @@ const businessSchema = new mongoose.Schema({
  businessId:String,
  googleReviewLink:String,
  apifyDatasetId:String,
- googleReviewCount:{ type:Number, default:0 },
- createdAt:{ type:Date, default:Date.now }
+ createdAt:{type:Date,default:Date.now}
 });
-const Business = mongoose.model("Business", businessSchema);
+const Business = mongoose.model("Business",businessSchema);
 
-// ===== Monthly Stats =====
+// MONTHLY STATS
 const statsSchema = new mongoose.Schema({
  businessId:String,
  month:String,
- total:{ type:Number, default:0 },
- positive:{ type:Number, default:0 },
- negative:{ type:Number, default:0 }
+ total:{type:Number,default:0},
+ positive:{type:Number,default:0},
+ negative:{type:Number,default:0}
 });
-const Stats = mongoose.model("Stats", statsSchema);
+const Stats = mongoose.model("Stats",statsSchema);
 
-// ===== Bad Feedback =====
-const badFeedbackSchema = new mongoose.Schema({
+// NEGATIVE FEEDBACK
+const badSchema = new mongoose.Schema({
  businessId:String,
  name:String,
  email:String,
@@ -54,317 +50,210 @@ const badFeedbackSchema = new mongoose.Schema({
  month:String,
  date:Date
 });
-const BadFeedback = mongoose.model("BadFeedback", badFeedbackSchema);
+const BadFeedback = mongoose.model("BadFeedback",badSchema);
 
-// ===== LEVEL 2 Review Requests =====
-const reviewRequestSchema = new mongoose.Schema({
+// MAIN TRACKING (MOST IMPORTANT)
+const requestSchema = new mongoose.Schema({
  businessId:String,
  customerName:String,
- sentTime:Date,
- status:{ type:String, default:"waiting" },
- matchedAt:Date
+ mobile:String,
+
+ status:{type:String,default:"sent"}, 
+ // sent | opened | positive | negative
+
+ sentTime:{type:Date,default:Date.now},
+ resendCount:{type:Number,default:0}
 });
-const ReviewRequest = mongoose.model("ReviewRequest", reviewRequestSchema);
+const ReviewRequest = mongoose.model("ReviewRequest",requestSchema);
 
 /* =======================
- Health
+ HEALTH
 ======================= */
-app.get("/", (req,res)=>{
- res.send("Review Booster Running 🚀");
-});
+app.get("/",(req,res)=>res.send("Server Running 🚀"));
 
 /* =======================
- Create Business
+ CREATE BUSINESS
 ======================= */
-app.post("/api/create-business", async (req,res)=>{
-
+app.post("/api/create-business", async(req,res)=>{
  const {name,email,password,googleReviewLink,apifyDatasetId} = req.body;
 
- const exist = await Business.findOne({ email });
- if(exist) return res.json({ success:false });
+ const exist = await Business.findOne({email});
+ if(exist) return res.json({success:false});
 
- const businessId = "biz_" + Date.now();
+ const businessId="biz_"+Date.now();
 
  await Business.create({
   name,email,password,googleReviewLink,apifyDatasetId,businessId
  });
 
- res.json({ success:true,businessId });
-
+ res.json({success:true,businessId});
 });
 
 /* =======================
- Login
+ LOGIN
 ======================= */
-app.post("/api/login", async (req,res)=>{
- const { email,password } = req.body;
+app.post("/api/login", async(req,res)=>{
+ const {email,password}=req.body;
 
- const business = await Business.findOne({ email,password });
- if(!business) return res.json({ success:false });
+ const b = await Business.findOne({email,password});
+ if(!b) return res.json({success:false});
 
  res.json({
   success:true,
-  businessId:business.businessId,
-  businessName:business.name,
-  googleReviewLink:business.googleReviewLink
+  businessId:b.businessId,
+  businessName:b.name,
+  googleReviewLink:b.googleReviewLink
  });
 });
 
 /* =======================
- Save Positive Name (LEVEL 2)
+ SAVE REQUEST (WHEN SEND WHATSAPP)
 ======================= */
-app.post("/api/save-review-request", async(req,res)=>{
-
- const { businessId, customerName } = req.body;
+app.post("/api/save-request", async(req,res)=>{
+ const {businessId,customerName,mobile}=req.body;
 
  await ReviewRequest.create({
   businessId,
-  customerName: customerName.toLowerCase(),
-  sentTime:new Date(),
-  status:"waiting"
+  customerName:customerName.toLowerCase(),
+  mobile,
+  status:"sent"
  });
 
- res.json({ success:true });
-});
+ // monthly total++
+ const now=new Date();
+ const month=`${now.getFullYear()}-${now.getMonth()+1}`;
 
-/* =======================
- Increase WhatsApp Total
-======================= */
-app.post("/api/increase-total", async (req,res)=>{
-
- const { businessId } = req.body;
- const now = new Date();
- const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
-
- let stats = await Stats.findOne({ businessId,month:monthKey });
- if(!stats) stats = new Stats({ businessId,month:monthKey });
+ let stats=await Stats.findOne({businessId,month});
+ if(!stats) stats=new Stats({businessId,month});
 
  stats.total++;
  await stats.save();
 
- res.json({ success:true });
+ res.json({success:true});
 });
 
 /* =======================
- Bad Feedback
+ MARK OPENED
 ======================= */
-app.post("/api/bad-feedback", async (req,res)=>{
+app.post("/api/opened", async(req,res)=>{
+ const {businessId,name}=req.body;
 
- const { businessId,name,email,message } = req.body;
+ await ReviewRequest.updateOne({
+  businessId,
+  customerName:name.toLowerCase()
+ },{
+  status:"opened"
+ });
 
- const now = new Date();
- const monthKey = `${now.getFullYear()}-${now.getMonth()+1}`;
+ res.json({success:true});
+});
+
+/* =======================
+ MARK POSITIVE
+======================= */
+app.post("/api/mark-positive", async(req,res)=>{
+ const {businessId,name}=req.body;
+
+ await ReviewRequest.updateOne({
+  businessId,
+  customerName:name.toLowerCase()
+ },{
+  status:"positive"
+ });
+
+ const now=new Date();
+ const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+
+ let stats=await Stats.findOne({businessId,month});
+ if(!stats) stats=new Stats({businessId,month});
+
+ stats.positive++;
+ await stats.save();
+
+ res.json({success:true});
+});
+
+/* =======================
+ BAD FEEDBACK
+======================= */
+app.post("/api/bad-feedback", async(req,res)=>{
+ const {businessId,name,email,message}=req.body;
+
+ const now=new Date();
+ const month=`${now.getFullYear()}-${now.getMonth()+1}`;
 
  await BadFeedback.create({
   businessId,name,email,message,
-  month:monthKey,
+  month,
   date:new Date()
  });
 
- let stats = await Stats.findOne({ businessId,month:monthKey });
- if(!stats) stats = new Stats({ businessId,month:monthKey });
+ await ReviewRequest.updateOne({
+  businessId,
+  customerName:name.toLowerCase()
+ },{
+  status:"negative"
+ });
 
- stats.total++;
+ let stats=await Stats.findOne({businessId,month});
+ if(!stats) stats=new Stats({businessId,month});
+
  stats.negative++;
-
  await stats.save();
 
- res.json({ success:true });
+ res.json({success:true});
 });
 
-
-
 /* =======================
- Get Bad Feedback List (FIX)
+ GET DASHBOARD STATS
 ======================= */
-app.get("/api/bad-feedback", async (req,res)=>{
-
- try{
-
-  const { businessId, month } = req.query;
-
-  if(!businessId || !month){
-    return res.json([]);
-  }
-
-  const list = await BadFeedback.find({
-    businessId,
-    month
-  }).sort({ date:-1 });
-
-  res.json(list);
-
- }catch(err){
-  res.json([]);
- }
-
+app.get("/api/stats", async(req,res)=>{
+ const {businessId,month}=req.query;
+ const stats=await Stats.findOne({businessId,month});
+ res.json(stats || {total:0,positive:0,negative:0});
 });
+
 /* =======================
- Get Stats
+ GET USER LISTS
 ======================= */
-app.get("/api/stats", async (req,res)=>{
+app.get("/api/user-status", async(req,res)=>{
+ const {businessId}=req.query;
 
- const { businessId,month } = req.query;
- const stats = await Stats.findOne({ businessId,month });
+ const positive=await ReviewRequest.find({businessId,status:"positive"});
+ const negative=await ReviewRequest.find({businessId,status:"negative"});
+ const nothing=await ReviewRequest.find({businessId,status:"sent"});
 
- res.json(stats || { total:0,positive:0,negative:0 });
+ res.json({positive,negative,nothing});
 });
 
 /* =======================
- Sync Google (manual button)
+ GET NEGATIVE LIST
 ======================= */
-app.post("/api/sync-google-reviews", async (req,res)=>{
+app.get("/api/bad-feedback", async(req,res)=>{
+ const {businessId,month}=req.query;
 
- try{
+ const list=await BadFeedback.find({
+  businessId,month
+ }).sort({date:-1});
 
-  const { businessId } = req.body;
-  const business = await Business.findOne({ businessId });
-
-  if(!business || !business.apifyDatasetId){
-   return res.json({ success:false,msg:"Dataset not set" });
-  }
-
-  const url=`https://api.apify.com/v2/datasets/${business.apifyDatasetId}/items?clean=true`;
-  const response = await axios.get(url);
-  const data=response.data;
-
-  if(!data || data.length===0) return res.json({ success:false });
-
-  const liveTotal=data[0].reviewsCount;
-
-  await Business.updateOne({ businessId },{ googleReviewCount:liveTotal });
-
-  res.json({ success:true,liveTotal });
-
- }catch(err){
-  res.json({ success:false });
- }
-
+ res.json(list);
 });
 
 /* =======================
- LEVEL 2 MATCHING CRON (5 MIN)
+ GET GOOGLE LINK
 ======================= */
+app.get("/api/get-business/:id", async(req,res)=>{
+ const b=await Business.findOne({businessId:req.params.id});
+ if(!b) return res.json({success:false});
 
-
-cron.schedule("*/5 * * * *", async ()=>{
-
- console.log("Checking new reviews...");
-
- const businesses = await Business.find();
-
- for(const biz of businesses){
-
-  try{
-
-   // ⭐ ALWAYS GET LATEST REVIEWS
-   const url="https://api.apify.com/v2/actor-tasks/pELBXtpfeQW53f4Z4/runs/last/dataset/items?token=apify_api_OGYVaSsmeyn1EpOrX8ab4q43J6yL9O0fj9Ew&clean=true";
-
-   const response=await axios.get(url);
-   const data=response.data;
-
-   if(!data || data.length===0) continue;
-
-   const reviews=data;
-
-   const pending=await ReviewRequest.find({
-    businessId:biz.businessId,
-    status:"waiting"
-   });
-
-   for(const req of pending){
-
-    for(const r of reviews){
-
-     if(!r.name || !r.publishedAtDate) continue;
-
-     const reviewName=r.name.toLowerCase().trim();
-     const reviewTime=new Date(r.publishedAtDate);
-     const sentTime=new Date(req.sentTime);
-
-     const diff=(reviewTime - sentTime)/(1000*60*60); // ⭐ correct time check
-
-     if(
-       reviewName.includes(req.customerName) &&
-       diff>=0 && diff<=24
-     ){
-
-      console.log("Matched:",reviewName);
-
-      req.status="done";
-      req.matchedAt=new Date();
-      await req.save();
-
-      const now=new Date();
-      const monthKey=`${now.getFullYear()}-${now.getMonth()+1}`;
-
-      let stats=await Stats.findOne({
-       businessId:biz.businessId,
-       month:monthKey
-      });
-
-      if(!stats){
-       stats=new Stats({
-        businessId:biz.businessId,
-        month:monthKey
-       });
-      }
-
-      stats.positive+=1;
-      await stats.save();
-     }
-    }
-   }
-
-  }catch(e){
-   console.log("Match error:",biz.name);
-  }
- }
-
- console.log("Match check done");
-
+ res.json({
+  success:true,
+  googleReviewLink:b.googleReviewLink
+ });
 });
 
- 
-
- 
-
-
 /* =======================
- Start Server
+ START SERVER
 ======================= */
 const PORT=process.env.PORT||3000;
-app.listen(PORT,()=>{
- console.log("Server running on",PORT);
-});
-
-
-
-/* =======================
- Get Business Public Data (IMPORTANT)
-======================= */
-app.get("/api/get-business/:id", async (req,res)=>{
-
- try{
-
-   const business = await Business.findOne({
-     businessId: req.params.id
-   });
-
-   if(!business){
-     return res.json({ success:false, msg:"Business not found" });
-   }
-
-   res.json({
-     success:true,
-     googleReviewLink: business.googleReviewLink
-   });
-
- }catch(err){
-   res.json({ success:false });
- }
-
-});
-
-
-
+app.listen(PORT,()=>console.log("Server running",PORT));
