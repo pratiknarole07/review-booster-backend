@@ -217,13 +217,38 @@ app.get("/api/stats", async(req,res)=>{
  GET USER LISTS
 ======================= */
 app.get("/api/user-status", async(req,res)=>{
- const {businessId}=req.query;
 
- const positive=await ReviewRequest.find({businessId,status:"positive"});
- const negative=await ReviewRequest.find({businessId,status:"negative"});
- const nothing=await ReviewRequest.find({businessId,status:"sent"});
+ const { businessId, month } = req.query;
+
+ if(!businessId || !month){
+  return res.json({positive:[],negative:[],nothing:[]});
+ }
+
+ // month format: 2026-2
+ const [year,m] = month.split("-");
+ const start = new Date(year, m-1, 1);
+ const end = new Date(year, m, 1);
+
+ const positive = await ReviewRequest.find({
+  businessId,
+  status:"positive",
+  sentTime:{ $gte:start, $lt:end }
+ });
+
+ const negative = await ReviewRequest.find({
+  businessId,
+  status:"negative",
+  sentTime:{ $gte:start, $lt:end }
+ });
+
+ const nothing = await ReviewRequest.find({
+  businessId,
+  status:"sent",
+  sentTime:{ $gte:start, $lt:end }
+ });
 
  res.json({positive,negative,nothing});
+
 });
 
 /* =======================
