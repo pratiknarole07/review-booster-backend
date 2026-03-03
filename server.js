@@ -57,10 +57,8 @@ const requestSchema = new mongoose.Schema({
  businessId:String,
  customerName:String,
  mobile:String,
-
  status:{type:String,default:"sent"}, 
- // sent | opened | positive | negative
-
+ month:String,   // 👈 ADD THIS
  sentTime:{type:Date,default:Date.now},
  resendCount:{type:Number,default:0}
 });
@@ -112,16 +110,19 @@ app.post("/api/login", async(req,res)=>{
 app.post("/api/save-request", async(req,res)=>{
  const {businessId,customerName,mobile}=req.body;
 
- await ReviewRequest.create({
+const now=new Date();
+const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+
+await ReviewRequest.create({
   businessId,
   customerName:customerName.toLowerCase(),
   mobile,
-  status:"sent"
- });
+  status:"sent",
+  month
+});
 
  // monthly total++
- const now=new Date();
- const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+ 
 
  let stats=await Stats.findOne({businessId,month});
  if(!stats) stats=new Stats({businessId,month});
@@ -217,11 +218,11 @@ app.get("/api/stats", async(req,res)=>{
  GET USER LISTS
 ======================= */
 app.get("/api/user-status", async(req,res)=>{
- const {businessId}=req.query;
+ const {businessId,month}=req.query;
 
- const positive=await ReviewRequest.find({businessId,status:"positive"});
- const negative=await ReviewRequest.find({businessId,status:"negative"});
- const nothing=await ReviewRequest.find({businessId,status:"sent"});
+ const positive=await ReviewRequest.find({businessId,status:"positive",month});
+ const negative=await ReviewRequest.find({businessId,status:"negative",month});
+ const nothing=await ReviewRequest.find({businessId,status:"sent",month});
 
  res.json({positive,negative,nothing});
 });
