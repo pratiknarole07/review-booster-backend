@@ -137,14 +137,18 @@ await ReviewRequest.create({
  MARK OPENED
 ======================= */
 app.post("/api/opened", async(req,res)=>{
- const {businessId,name}=req.body;
+const {businessId,name}=req.body;
 
- await ReviewRequest.updateOne({
+const now=new Date();
+const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+
+await ReviewRequest.updateOne({
   businessId,
-  customerName:name.toLowerCase()
- },{
+  customerName:name.toLowerCase(),
+  month
+},{
   status:"opened"
- });
+});
 
  res.json({success:true});
 });
@@ -155,15 +159,16 @@ app.post("/api/opened", async(req,res)=>{
 app.post("/api/mark-positive", async(req,res)=>{
  const {businessId,name}=req.body;
 
+ const now=new Date();
+ const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+
  await ReviewRequest.updateOne({
   businessId,
-  customerName:name.toLowerCase()
+  customerName:name.toLowerCase(),
+  month
  },{
   status:"positive"
  });
-
- const now=new Date();
- const month=`${now.getFullYear()}-${now.getMonth()+1}`;
 
  let stats=await Stats.findOne({businessId,month});
  if(!stats) stats=new Stats({businessId,month});
@@ -191,11 +196,11 @@ app.post("/api/bad-feedback", async(req,res)=>{
 
  await ReviewRequest.updateOne({
   businessId,
-  customerName:name.toLowerCase()
- },{
+  customerName:name.toLowerCase(),
+  month
+},{
   status:"negative"
- });
-
+});
  let stats=await Stats.findOne({businessId,month});
  if(!stats) stats=new Stats({businessId,month});
 
