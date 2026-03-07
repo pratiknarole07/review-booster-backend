@@ -1,3 +1,4 @@
+
 const express = require("express");
 const app = express();
 const cors = require("cors");
@@ -113,17 +114,12 @@ app.post("/api/save-request", async(req,res)=>{
 const now=new Date();
 const month=`${now.getFullYear()}-${now.getMonth()+1}`;
 
-const request = await ReviewRequest.create({
+await ReviewRequest.create({
   businessId,
   customerName:customerName.toLowerCase(),
   mobile,
   status:"sent",
   month
-});
-
-res.json({
-  success:true,
-  requestId: request._id
 });
 
  // monthly total++
@@ -141,20 +137,19 @@ res.json({
 /* =======================
  MARK OPENED
 ======================= */
-
 app.post("/api/opened", async(req,res)=>{
+const {businessId,name}=req.body;
 
- const {requestId,businessId} = req.body;
+const now=new Date();
+const month=`${now.getFullYear()}-${now.getMonth()+1}`;
 
- await ReviewRequest.updateOne(
-  {
-   _id: requestId,
-   businessId: businessId
-  },
-  {
-   status: "opened"
-  }
- );
+await ReviewRequest.updateOne({
+  businessId,
+  customerName:name.toLowerCase(),
+  month
+},{
+  status:"opened"
+});
 
  res.json({success:true});
 });
@@ -163,18 +158,18 @@ app.post("/api/opened", async(req,res)=>{
  MARK POSITIVE
 ======================= */
 app.post("/api/mark-positive", async(req,res)=>{
-
- const {requestId,businessId}=req.body;
-
- await ReviewRequest.updateOne({
-  _id:requestId,
-  businessId:businessId
- },{
-  status:"positive"
- });
+ const {businessId,name}=req.body;
 
  const now=new Date();
  const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+
+ await ReviewRequest.updateOne({
+  businessId,
+  customerName:name.toLowerCase(),
+  month
+ },{
+  status:"positive"
+ });
 
  let stats=await Stats.findOne({businessId,month});
  if(!stats) stats=new Stats({businessId,month});
@@ -184,46 +179,38 @@ app.post("/api/mark-positive", async(req,res)=>{
 
  res.json({success:true});
 });
+
 /* =======================
  BAD FEEDBACK
 ======================= */
 app.post("/api/bad-feedback", async(req,res)=>{
+ const {businessId,name,email,message}=req.body;
 
- const {businessId,requestId,name,email,message}=req.body;
+ const now=new Date();
+ const month=`${now.getFullYear()}-${now.getMonth()+1}`;
 
- const now = new Date();
- const month = `${now.getFullYear()}-${now.getMonth()+1}`;
-
- // Save feedback message
  await BadFeedback.create({
-  businessId,
-  name,
-  email,
-  message,
+  businessId,name,email,message,
   month,
   date:new Date()
  });
 
- // Update review request status
- await ReviewRequest.updateOne(
-  {
-   _id: requestId,
-   businessId: businessId
-  },
-  {
-   status: "negative"
-  }
- );
-
- // Update stats
- let stats = await Stats.findOne({businessId,month});
- if(!stats) stats = new Stats({businessId,month});
+ await ReviewRequest.updateOne({
+  businessId,
+  customerName:name.toLowerCase(),
+  month
+},{
+  status:"negative"
+});
+ let stats=await Stats.findOne({businessId,month});
+ if(!stats) stats=new Stats({businessId,month});
 
  stats.negative++;
  await stats.save();
 
  res.json({success:true});
 });
+
 /* =======================
  GET DASHBOARD STATS
 ======================= */
