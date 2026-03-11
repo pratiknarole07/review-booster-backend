@@ -140,21 +140,22 @@ app.post("/api/save-request", async(req,res)=>{
  MARK OPENED
 ======================= */
 app.post("/api/opened", async(req,res)=>{
-const {businessId,name}=req.body;
 
-const now=new Date();
-const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+ const {requestId}=req.body;
 
-await ReviewRequest.updateOne({
-  businessId,
-  customerName:name.toLowerCase(),
-  month
-},{
-  status:"opened"
-});
+ const reqData = await ReviewRequest.findById(requestId);
+
+ if(!reqData) return res.json({success:false});
+
+ await ReviewRequest.updateOne(
+   {_id:requestId},
+   {status:"opened"}
+ );
 
  res.json({success:true});
+
 });
+
 
 /* =======================
  MARK POSITIVE
