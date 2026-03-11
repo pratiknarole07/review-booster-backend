@@ -109,21 +109,19 @@ app.post("/api/login", async(req,res)=>{
  SAVE REQUEST (WHEN SEND WHATSAPP)
 ======================= */
 app.post("/api/save-request", async(req,res)=>{
+
  const {businessId,customerName,mobile}=req.body;
 
-const now=new Date();
-const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+ const now=new Date();
+ const month=`${now.getFullYear()}-${now.getMonth()+1}`;
 
-await ReviewRequest.create({
+ const request = await ReviewRequest.create({
   businessId,
   customerName:customerName.toLowerCase(),
   mobile,
   status:"sent",
   month
-});
-
- // monthly total++
- 
+ });
 
  let stats=await Stats.findOne({businessId,month});
  if(!stats) stats=new Stats({businessId,month});
@@ -131,7 +129,11 @@ await ReviewRequest.create({
  stats.total++;
  await stats.save();
 
- res.json({success:true});
+ res.json({
+  success:true,
+  requestId:request._id
+ });
+
 });
 
 /* =======================
@@ -158,18 +160,20 @@ await ReviewRequest.updateOne({
  MARK POSITIVE
 ======================= */
 app.post("/api/mark-positive", async(req,res)=>{
- const {businessId,name}=req.body;
 
- const now=new Date();
- const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+ const {requestId}=req.body;
 
- await ReviewRequest.updateOne({
-  businessId,
-  customerName:name.toLowerCase(),
-  month
- },{
-  status:"positive"
- });
+ const reqData = await ReviewRequest.findById(requestId);
+
+ if(!reqData) return res.json({success:false});
+
+ const month=reqData.month;
+ const businessId=reqData.businessId;
+
+ await ReviewRequest.updateOne(
+  {_id:requestId},
+  {status:"positive"}
+ );
 
  let stats=await Stats.findOne({businessId,month});
  if(!stats) stats=new Stats({businessId,month});
@@ -179,29 +183,36 @@ app.post("/api/mark-positive", async(req,res)=>{
 
  res.json({success:true});
 });
+ 
 
 /* =======================
  BAD FEEDBACK
 ======================= */
 app.post("/api/bad-feedback", async(req,res)=>{
- const {businessId,name,email,message}=req.body;
 
- const now=new Date();
- const month=`${now.getFullYear()}-${now.getMonth()+1}`;
+ const {requestId,name,email,message}=req.body;
+
+ const reqData=await ReviewRequest.findById(requestId);
+
+ if(!reqData) return res.json({success:false});
+
+ const businessId=reqData.businessId;
+ const month=reqData.month;
 
  await BadFeedback.create({
-  businessId,name,email,message,
+  businessId,
+  name,
+  email,
+  message,
   month,
   date:new Date()
  });
 
- await ReviewRequest.updateOne({
-  businessId,
-  customerName:name.toLowerCase(),
-  month
-},{
-  status:"negative"
-});
+ await ReviewRequest.updateOne(
+  {_id:requestId},
+  {status:"negative"}
+ );
+
  let stats=await Stats.findOne({businessId,month});
  if(!stats) stats=new Stats({businessId,month});
 
@@ -209,6 +220,7 @@ app.post("/api/bad-feedback", async(req,res)=>{
  await stats.save();
 
  res.json({success:true});
+
 });
 
 /* =======================
